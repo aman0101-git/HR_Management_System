@@ -128,7 +128,7 @@ export default function AddCandidate() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">Phone Number *</label>
-            <input type="tel" name="phone" required maxLength={15} value={formData.phone} onChange={handleChange} className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+            <input type="tel" name="phone" required maxLength={10} value={formData.phone} onChange={handleChange} className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase">Email Address</label>

@@ -1,4 +1,3 @@
-// src/components/Navbar.tsx
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +6,7 @@ import {
   PhoneCall, 
   Users, 
   Activity, 
-  Handshake,
+  Building2,
   User 
 } from "lucide-react";
 
@@ -25,7 +24,7 @@ export default function Navbar() {
     switch (user?.role) {
       case "HR":
         return {
-          text: "HR Helpline: +91 800-555-0199",
+          text: "HR Helpline: Active",
           Icon: PhoneCall,
           colorClass: "text-emerald-700",
           bgClass: "bg-emerald-50 border-emerald-200",
@@ -33,7 +32,7 @@ export default function Navbar() {
         };
       case "SUPERVISOR":
         return {
-          text: "Active Floor HRs: 2",
+          text: "Floor Status: Supervised",
           Icon: Users,
           colorClass: "text-indigo-700",
           bgClass: "bg-indigo-50 border-indigo-200",
@@ -43,14 +42,14 @@ export default function Navbar() {
         return {
           text: "System Status: Online",
           Icon: Activity,
-          colorClass: "text-violet-700",
-          bgClass: "bg-violet-50 border-violet-200",
-          pingClass: "bg-violet-500",
+          colorClass: "text-blue-700",
+          bgClass: "bg-blue-50 border-blue-200",
+          pingClass: "bg-blue-500",
         };
       default:
         return {
-          text: "Workspace",
-          Icon: Handshake,
+          text: "Workspace Connected",
+          Icon: Activity,
           colorClass: "text-slate-700",
           bgClass: "bg-slate-50 border-slate-200",
           pingClass: "bg-slate-500",
@@ -62,77 +61,74 @@ export default function Navbar() {
   const DisplayIcon = displayConfig.Icon;
 
   return (
-    <header className="sticky top-0 z-50 h-16 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-sm transition-all duration-300 shrink-0">
-      
-      {/* Premium Logo & Greeting Section */}
-      <div className="flex items-center gap-3.5 group cursor-pointer">
-        {/* Upgraded Icon Container with gradient, ring, and hover tilt */}
-        <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow-sm ring-4 ring-blue-50 group-hover:ring-blue-100 group-hover:shadow-md transition-all duration-300">
-          <Handshake className="w-5 h-5 text-white transform group-hover:-rotate-12 transition-transform duration-300" />
-        </div>
+    <nav className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-slate-200 shadow-sm transition-all duration-300">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
-        {/* Text Container with clear visual hierarchy */}
-        <div className="flex flex-col justify-center">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-            Welcome Back
+        {/* LEFT: Premium Brand Logo Area */}
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/')}>
+          <div className="flex items-center justify-center w-9 h-9 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg shadow-sm ring-2 ring-transparent group-hover:ring-blue-100 transition-all duration-300">
+            <Building2 className="w-5 h-5 text-white transform group-hover:scale-110 transition-transform duration-300" />
+          </div>
+          <div className="hidden sm:flex flex-col justify-center">
+            <span className="text-lg font-black tracking-tight text-slate-800 leading-none mt-1">
+              Firstclose <span className="text-blue-600">HRMS</span>
+            </span>
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">
+              HR Management
+            </span>
+          </div>
+        </div>
+
+        {/* CENTER: Dynamic Status Pill (Hidden on mobile to save space) */}
+        <div className={`hidden md:flex items-center gap-2.5 px-4 py-1.5 rounded-full border shadow-sm transition-colors duration-300 ${displayConfig.bgClass}`}>
+          <span className="relative flex h-2 w-2">
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${displayConfig.pingClass}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${displayConfig.pingClass}`}></span>
           </span>
-          <h2 className="text-lg font-extrabold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-600 bg-clip-text text-transparent tracking-tight leading-none">
-            {user?.username ? user.username.toUpperCase() : "EMPLOYEE"}
-          </h2>
-        </div>
-      </div>
-
-      {/* Dynamic Status Pill */}
-      <div className={`hidden md:flex items-center gap-2.5 px-4 py-1.5 rounded-full border shadow-sm transition-colors duration-300 ${displayConfig.bgClass}`}>
-        <span className="relative flex h-2.5 w-2.5">
-          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${displayConfig.pingClass}`}></span>
-          <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${displayConfig.pingClass}`}></span>
-        </span>
-        <DisplayIcon className={`w-4 h-4 ${displayConfig.colorClass}`} />
-        <span className={`text-sm font-semibold tracking-wide ${displayConfig.colorClass}`}>
-          {displayConfig.text}
-        </span>
-      </div>
-
-      {/* User Actions Section */}
-      <div className="flex items-center gap-2 sm:gap-4">
-        
-        {/* User Profile Widget */}
-        <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-default border border-transparent hover:border-slate-200">
-          <div className="flex flex-col text-right justify-center">
-            <p className="text-sm font-bold text-slate-900 leading-none">
-              {user?.username || "Employee"}
-            </p>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">
-              {user?.role || "USER"}
-            </p>
-          </div>
-          <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center border border-slate-300 shadow-inner">
-            {user?.username ? (
-              <span className="text-sm font-bold text-slate-700">
-                {user.username.charAt(0).toUpperCase()}
-              </span>
-            ) : (
-              <User className="w-5 h-5 text-slate-500" />
-            )}
-          </div>
+          <DisplayIcon className={`w-3.5 h-3.5 ${displayConfig.colorClass}`} />
+          <span className={`text-xs font-bold tracking-wide ${displayConfig.colorClass} uppercase`}>
+            {displayConfig.text}
+          </span>
         </div>
 
-        {/* Divider */}
-        <div className="h-8 w-px bg-slate-200 hidden sm:block mx-1"></div>
+        {/* RIGHT: User Profile & Actions Section */}
+        <div className="flex items-center gap-2 sm:gap-5">
+          
+          {/* User Profile Widget */}
+          <div className="flex items-center gap-3 cursor-default">
+            <div className="hidden sm:flex flex-col text-right justify-center">
+              <p className="text-sm font-black text-slate-800 leading-none">
+                {user?.username || "Employee"}
+              </p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {user?.role || "USER"} Portal
+              </p>
+            </div>
+            {/* Avatar */}
+            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shadow-inner text-slate-600 font-bold text-sm">
+              {user?.username ? (
+                user.username.charAt(0).toUpperCase()
+              ) : (
+                <User className="w-4 h-4 text-slate-400" />
+              )}
+            </div>
+          </div>
 
-        {/* Logout Button */}
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={handleLogout}
-          className="text-slate-600 hover:text-red-700 hover:bg-red-50 transition-all font-medium px-3 h-9"
-        >
-          <LogOut className="w-4 h-4 sm:mr-2" />
-          <span className="hidden sm:inline">Log Out</span>
-        </Button>
+          {/* Clean Vertical Divider */}
+          <div className="h-6 w-px bg-slate-200 hidden sm:block mx-1"></div>
 
+          {/* Logout Button */}
+          <Button 
+            variant="ghost" 
+            onClick={handleLogout}
+            className="text-slate-500 hover:text-red-700 hover:bg-red-50 transition-all font-bold px-3 h-9 rounded-lg"
+          >
+            <LogOut className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Logout</span>
+          </Button>
+
+        </div>
       </div>
-    </header>
+    </nav>
   );
 }
