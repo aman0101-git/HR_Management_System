@@ -20,28 +20,11 @@ export const addCandidate = async (
   
   const authReq = req as AuthenticatedRequest;
 
-  // 1. Destructure ALL fields to match the frontend state
   const {
-    first_name,
-    last_name,
-    phone,
-    email,
-    qualification,
-    passing_year,
-    profile,
-    experience_level,
-    current_company,
-    current_designation,
-    current_ctc,
-    expected_ctc,
-    current_location,
-    preferred_location,
-    ready_to_relocate,
-    notice_period,
-    available_from,
-    source,
-    resume_url,
-    remark
+    first_name, last_name, phone, email, qualification, passing_year, profile, 
+    experience_level, current_company, current_designation, current_ctc, 
+    expected_ctc, current_location, preferred_location, ready_to_relocate, 
+    notice_period, available_from, source, resume_url, remark
   } = req.body;
 
   const created_by = authReq.user?.id; 
@@ -68,13 +51,11 @@ export const addCandidate = async (
       return;
     }
 
-    // 2. Parse numbers and dates safely (Frontend sends empty strings, DB needs specific types or NULL)
     const parsedCurrentCtc = current_ctc ? parseFloat(current_ctc) : null;
     const parsedExpectedCtc = expected_ctc ? parseFloat(expected_ctc) : null;
     const parsedPassingYear = passing_year ? parseInt(passing_year, 10) : null;
     const parsedAvailableFrom = available_from ? available_from : null;
 
-    // 3. Insert into candidates table mapping all columns
     const [candidateResult] = await connection.execute<ResultSetHeader>(
       `INSERT INTO candidates 
       (first_name, last_name, phone, email, qualification, passing_year, profile, experience_level, 
@@ -83,38 +64,26 @@ export const addCandidate = async (
        resume_url, remark, created_by) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        first_name, 
-        last_name, 
-        phone, 
-        email || null, 
-        qualification || null, 
-        parsedPassingYear,
-        profile || null, 
-        experience_level || 'Fresher',
-        current_company || null,
-        current_designation || null,
-        parsedCurrentCtc,
-        parsedExpectedCtc,
-        current_location || null,
-        preferred_location || null,
-        ready_to_relocate || 'Yes',
-        notice_period || 'Immediate',
-        parsedAvailableFrom,
-        source || 'Work India', 
-        resume_url || null,
-        remark || null,
-        created_by
+        first_name, last_name, phone, email || null, qualification || null, parsedPassingYear,
+        profile || null, experience_level || 'Fresher', current_company || null,
+        current_designation || null, parsedCurrentCtc, parsedExpectedCtc, current_location || null,
+        preferred_location || null, ready_to_relocate || 'Yes', notice_period || 'Immediate',
+        parsedAvailableFrom, source || 'Work India', resume_url || null, remark || null, created_by
       ]
     );
 
     const newCandidateId = candidateResult.insertId;
 
-    // Insert initial status into lead_status_history
+    // Calculate tomorrow's date for the default follow-up
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowFormatted = tomorrow.toISOString().split('T')[0];
+
     await connection.execute<ResultSetHeader>(
       `INSERT INTO lead_status_history 
-      (candidate_id, status_id, remarks, updated_by) 
-      VALUES (?, ?, ?, ?)`,
-      [newCandidateId, 1, "System: Lead Created", created_by]
+      (candidate_id, status_id, remarks, follow_up_date, updated_by) 
+      VALUES (?, ?, ?, ?, ?)`,
+      [newCandidateId, 1, "System: Lead Created", tomorrowFormatted, created_by]
     );
 
     await connection.commit();
@@ -143,8 +112,6 @@ export const getMyLeads = async (
   }
 
   try {
-    // This query fetches the candidate, their latest status, and follow-up date 
-    // using a Common Table Expression (CTE) and Window Function.
     const query = `
       WITH LatestStatus AS (
         SELECT 
@@ -161,6 +128,7 @@ export const getMyLeads = async (
         c.last_name, 
         c.phone, 
         sm.status_name, 
+        sm.is_final_stage, /* <-- FIX: Added this crucial column for the frontend */
         ls.follow_up_date, 
         ls.last_update_time
       FROM candidates c
@@ -178,8 +146,6 @@ export const getMyLeads = async (
     res.status(500).json({ error: "Internal server error while fetching leads." });
   }
 };
-
-// Add these to your existing candidate.controller.ts
 
 export const getStatuses = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -204,7 +170,6 @@ export const getCandidateById = async (req: Request, res: Response): Promise<voi
   }
 
   try {
-    // 1. Fetch Candidate Details
     const [candidateRows] = await db.execute<RowDataPacket[]>(
       "SELECT * FROM candidates WHERE id = ? AND created_by = ?",
       [candidateId, hrId]
@@ -215,7 +180,6 @@ export const getCandidateById = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // 2. Fetch Immutable Timeline (lead_status_history joined with status_master)
     const [historyRows] = await db.execute<RowDataPacket[]>(
       `SELECT 
         h.id, h.remarks, h.follow_up_date, h.created_at,
@@ -249,7 +213,23 @@ export const appendCandidateStatus = async (req: Request, res: Response): Promis
   }
 
   try {
-    // Append the new status logic directly into history
+    // INDUSTRY STANDARD FIX: Prevent backend bypass. 
+    // Check if the candidate's CURRENT status is already a terminal stage.
+    const [currentStatus] = await db.execute<RowDataPacket[]>(
+      `SELECT s.is_final_stage 
+       FROM lead_status_history h
+       JOIN status_master s ON h.status_id = s.id
+       WHERE h.candidate_id = ?
+       ORDER BY h.created_at DESC LIMIT 1`,
+      [candidateId]
+    );
+
+    if (currentStatus.length > 0 && currentStatus[0].is_final_stage === 1) {
+      res.status(403).json({ error: "Action Denied: This candidate profile is locked in a final stage." });
+      return;
+    }
+
+    // If safe, append the new status logic directly into history
     await db.execute<ResultSetHeader>(
       `INSERT INTO lead_status_history 
       (candidate_id, status_id, remarks, follow_up_date, updated_by) 
