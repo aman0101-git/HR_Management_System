@@ -1,8 +1,8 @@
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { UserPlus, Calendar, Sparkles } from "lucide-react";
-import MyLeadsList from '../candidates/MyLeadsList'; // Adjust path if needed based on your folder structure
+import { UserPlus, Sparkles } from "lucide-react";
+import MyLeadsList from '../candidates/MyLeadsList';
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
