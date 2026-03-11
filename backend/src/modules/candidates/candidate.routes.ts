@@ -11,6 +11,9 @@ router.post("/", authenticate, Controller.addCandidate);
 
 // 2. Dynamic Routes (Parameterized)
 router.get("/:id", authenticate, Controller.getCandidateById);
-router.post("/:id/status", authenticate, Controller.appendCandidateStatus);
+router.get("/:id/calls", authenticate, Controller.getCandidateCallLogs);
+
+// 3. CALL LOGGING ROUTES
+router.post("/:id/interaction", authenticate, Controller.logInteraction);
 
 export default router;
