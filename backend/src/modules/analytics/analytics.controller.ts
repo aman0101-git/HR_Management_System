@@ -27,20 +27,43 @@ export const getDashboardAnalytics = async (
   }
 
   // 1. Role-Based Scoping
-  // If the user is an HR, they only see their own data. Admins/Supervisors see everything.
   const isAgent = role === 'HR';
-  
-  // Scopes for queries
-  const candidateScope = isAgent ? `WHERE c.created_by = ${db.escape(userId)}` : "";
-  const callScope = isAgent ? `WHERE cl.hr_id = ${db.escape(userId)}` : "";
-  const callScopeWithDate = isAgent 
-    ? `WHERE cl.hr_id = ${db.escape(userId)} AND DATE(cl.call_time) = CURDATE()` 
-    : `WHERE DATE(cl.call_time) = CURDATE()`;
+  const candidateScope = isAgent ? `AND c.created_by = ${db.escape(userId)}` : "";
+  const callScopeAgent = isAgent ? `AND cl.hr_id = ${db.escape(userId)}` : "";
+
+  // 2. Extract Frontend Query Params
+  const filter = (req.query.filter as string) || 'this_month';
+  const start = req.query.start as string;
+  const end = req.query.end as string;
+
+  // 3. Dynamic SQL Date Filter Generator
+  // This helper builds the exact WHERE clause snippet based on the selected timeframe
+  const getDateCondition = (columnName: string): string => {
+    switch (filter) {
+      case 'today':
+        return `DATE(${columnName}) = CURDATE()`;
+      case 'yesterday':
+        return `DATE(${columnName}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`;
+      case 'this_week':
+        // The ', 1' argument strictly enforces Monday as the first day of the week
+        return `YEARWEEK(${columnName}, 1) = YEARWEEK(CURDATE(), 1)`;
+      case 'this_month':
+        return `YEAR(${columnName}) = YEAR(CURDATE()) AND MONTH(${columnName}) = MONTH(CURDATE())`;
+      case 'custom':
+        if (start && end) {
+          // Prevent SQL injection by escaping the user-provided dates
+          return `DATE(${columnName}) BETWEEN ${db.escape(start)} AND ${db.escape(end)}`;
+        }
+        return "1=1"; // Fallback if dates are missing
+      default:
+        return `YEAR(${columnName}) = YEAR(CURDATE()) AND MONTH(${columnName}) = MONTH(CURDATE())`;
+    }
+  };
 
   try {
-    // 2. Define our Highly-Optimized SQL Queries
-    
-    // KPI 1: Active Leads & Hires MTD
+    // 4. Define our Highly-Optimized SQL Queries
+
+    // KPI 1: Active Leads (Always a live snapshot) & Hires (Filtered by date)
     const kpiQuery = `
       WITH LatestStatus AS (
         SELECT candidate_id, status_id, created_at,
@@ -49,23 +72,25 @@ export const getDashboardAnalytics = async (
       )
       SELECT 
         CAST(SUM(CASE WHEN sm.is_final_stage = 0 THEN 1 ELSE 0 END) AS SIGNED) as total_active_leads,
-        CAST(SUM(CASE WHEN sm.status_name = 'Selected-Joined' AND MONTH(ls.created_at) = MONTH(CURDATE()) AND YEAR(ls.created_at) = YEAR(CURDATE()) THEN 1 ELSE 0 END) AS SIGNED) as hires_mtd
+        CAST(SUM(CASE WHEN sm.status_name = 'Selected-Joined' AND ${getDateCondition('ls.created_at')} THEN 1 ELSE 0 END) AS SIGNED) as hires_mtd
       FROM candidates c
       INNER JOIN LatestStatus ls ON c.id = ls.candidate_id AND ls.rn = 1
       INNER JOIN status_master sm ON ls.status_id = sm.id
-      ${candidateScope}
+      WHERE 1=1 ${candidateScope}
     `;
 
-    // KPI 2: Call Stats for Today
+    // KPI 2: Call Stats (Filtered by Date)
     const callStatsQuery = `
       SELECT 
         COUNT(*) as total_calls_today,
         CAST(SUM(CASE WHEN call_result = 'Connected' THEN 1 ELSE 0 END) AS SIGNED) as connected_calls_today
       FROM call_logs cl
-      ${callScopeWithDate}
+      WHERE ${getDateCondition('cl.call_time')} ${callScopeAgent}
     `;
 
-    // Chart 1: Pipeline Funnel (Count by Active Stage)
+    // Chart 1: Pipeline Funnel 
+    // Note: Business logic dictates the funnel should show the CURRENT live pipeline, 
+    // not historical stages, so we don't apply the date filter here.
     const pipelineFunnelQuery = `
       WITH LatestStatus AS (
         SELECT candidate_id, status_id,
@@ -76,22 +101,20 @@ export const getDashboardAnalytics = async (
       FROM candidates c
       INNER JOIN LatestStatus ls ON c.id = ls.candidate_id AND ls.rn = 1
       INNER JOIN status_master sm ON ls.status_id = sm.id
-      WHERE sm.is_final_stage = 0 
-      ${isAgent ? `AND c.created_by = ${db.escape(userId)}` : ""}
+      WHERE sm.is_final_stage = 0 ${candidateScope}
       GROUP BY sm.id, sm.status_name
       ORDER BY sm.stage_order ASC
     `;
 
-    // Chart 2: Call Outcomes (Last 30 Days)
+    // Chart 2: Call Outcomes (Filtered by Date)
     const callOutcomesQuery = `
       SELECT call_result, COUNT(*) as count
       FROM call_logs cl
-      WHERE cl.call_time >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-      ${isAgent ? `AND cl.hr_id = ${db.escape(userId)}` : ""}
+      WHERE ${getDateCondition('cl.call_time')} ${callScopeAgent}
       GROUP BY call_result
     `;
 
-    // Chart 3: Source ROI (Where are the best candidates coming from?)
+    // Chart 3: Source ROI (Filtered by Candidate Creation Date)
     const sourceRoiQuery = `
       WITH LatestStatus AS (
         SELECT candidate_id, status_id,
@@ -105,13 +128,12 @@ export const getDashboardAnalytics = async (
       FROM candidates c
       INNER JOIN LatestStatus ls ON c.id = ls.candidate_id AND ls.rn = 1
       INNER JOIN status_master sm ON ls.status_id = sm.id
-      ${candidateScope}
+      WHERE ${getDateCondition('c.created_at')} ${candidateScope}
       GROUP BY c.source
       ORDER BY total_leads DESC
     `;
 
-    // 3. Execute all queries CONCURRENTLY using Promise.all
-    // This ensures the API responds in milliseconds, not seconds.
+    // 5. Execute all queries CONCURRENTLY
     const [
       [kpiRows],
       [callStatsRows],
@@ -126,7 +148,7 @@ export const getDashboardAnalytics = async (
       db.execute<RowDataPacket[]>(sourceRoiQuery)
     ]);
 
-    // 4. Construct the structured JSON response
+    // 6. Construct the structured JSON response
     res.status(200).json({
       kpis: {
         totalActiveLeads: kpiRows[0]?.total_active_leads || 0,
