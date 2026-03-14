@@ -8,6 +8,7 @@ import HrDashboard from '@/features/hr/dashboard/HrDashboard';
 import SupervisorDashboard from '@/features/supervisor/dashboard/SupervisorDashboard';
 import AddCandidate from '@/features/hr/candidates/AddCandidates';
 import CandidateProfile from '@/features/hr/candidates/CandidateProfile';
+import AnalyticsDashboard from '@/features/hr/dashboard/AnalyticsDashboard';
 
 export default function AppRoutes() {
   return (
@@ -62,6 +63,14 @@ export default function AppRoutes() {
           element={
             <RequireAuth role="HR">
               <CandidateProfile />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/hr/analytics"
+          element={
+            <RequireAuth role="HR">
+              <AnalyticsDashboard />
             </RequireAuth>
           }
         />

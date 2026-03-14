@@ -1,10 +1,10 @@
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { UserPlus, Sparkles } from "lucide-react";
+import { UserPlus, Sparkles, BarChart3 } from "lucide-react";
 import MyLeadsList from '../candidates/MyLeadsList';
 
-export default function AdminDashboard() {
+export default function HrDashboard() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -45,7 +45,15 @@ export default function AdminDashboard() {
           </p>
         </div>
         
-        <div className="relative z-10 flex shrink-0 mt-4 md:mt-0">
+        <div className="relative z-10 flex flex-col md:flex-row shrink-0 mt-4 md:mt-0 gap-3">
+          <Button 
+            onClick={() => navigate('/hr/analytics')} 
+            className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2.5 px-6 py-6 rounded-xl shadow-lg shadow-purple-600/20 transition-all hover:-translate-y-1 hover:shadow-purple-600/30 font-bold text-base w-full md:w-auto"
+          >
+            <BarChart3 className="w-5 h-5" />
+            View Dashboard
+          </Button>
+          
           <Button 
             onClick={() => navigate('/hr/candidates/add')} 
             className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2.5 px-6 py-6 rounded-xl shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-1 hover:shadow-blue-600/30 font-bold text-base w-full md:w-auto"
