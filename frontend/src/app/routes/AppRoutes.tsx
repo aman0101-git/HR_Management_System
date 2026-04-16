@@ -8,6 +8,8 @@ import HrDashboard from '@/features/hr/dashboard/HrDashboard';
 import SupervisorDashboard from '@/features/supervisor/dashboard/SupervisorDashboard';
 import AddCandidate from '@/features/hr/candidates/AddCandidates';
 import CandidateProfile from '@/features/hr/candidates/CandidateProfile';
+import AnalyticsDashboard from '@/features/hr/dashboard/AnalyticsDashboard';
+import MyLeadsList from '@/features/hr/candidates/MyLeadsList';
 
 export default function AppRoutes() {
   return (
@@ -21,13 +23,14 @@ export default function AppRoutes() {
           </AuthLayout>
         }
       />
+      
+      {/* Root Redirect based on generic login */}
       <Route
         path="/"
         element={<Navigate to="/login" replace />}
       />
 
       {/* PROTECTED ROUTES WRAPPED IN DASHBOARD LAYOUT */}
-      {/* The DashboardLayout contains the Navbar and an <Outlet /> for these nested routes */}
       <Route element={<DashboardLayout />}>
         
         {/* ADMIN ROUTES */}
@@ -49,8 +52,19 @@ export default function AppRoutes() {
             </RequireAuth>
           }
         />
+        
+        {/* FIXED: Added missing pipeline list route */}
         <Route
-          path="/hr/candidates/add"
+          path="/hr/candidates"
+          element={
+            <RequireAuth role="HR">
+              <MyLeadsList />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/hr/add"
           element={
             <RequireAuth role="HR">
               <AddCandidate />
@@ -62,6 +76,14 @@ export default function AppRoutes() {
           element={
             <RequireAuth role="HR">
               <CandidateProfile />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/hr/analytics"
+          element={
+            <RequireAuth role="HR">
+              <AnalyticsDashboard />
             </RequireAuth>
           }
         />

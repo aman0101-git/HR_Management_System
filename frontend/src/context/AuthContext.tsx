@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
+import { API_BASE } from "../apiBase"; // FIXED: Using Centralized API Base
 
 export interface User {
   id: number;
@@ -18,7 +19,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const API_BASE = "http://localhost:8080";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         withCredentials: true,
       });
       setUser(res.data);
-      return res.data; // ✅ RETURN USER
+      return res.data;
     } catch {
       setUser(null);
       return null;
