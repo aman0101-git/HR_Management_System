@@ -3,8 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { 
   Phone, Mail, Briefcase, MapPin, DollarSign, ExternalLink, 
-  Lock, CheckCircle2, Clock, XCircle, PhoneCall, List, PhoneMissed, PhoneOff, MessageSquare, ArrowLeft
+  Lock, CheckCircle2, Clock, XCircle, PhoneCall, List, PhoneMissed, PhoneOff, MessageSquare, ArrowLeft,
+  Loader2, ChevronRight, AlertCircle
 } from "lucide-react";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { API_BASE } from '../../../apiBase';
 
 interface StatusMaster {
   id: number;
@@ -31,6 +34,16 @@ interface CallLog {
   last_name: string;
 }
 
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
+};
+
 export default function CandidateProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -48,8 +61,9 @@ export default function CandidateProfile() {
   const [remarks, setRemarks] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const [logCall, setLogCall] = useState(true); 
-  const [callResult, setCallResult] = useState('');
+  const [callResult, setCallResult] = useState('Connected');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   // LOGIC: Should we show the pipeline update fields?
   const isPipelineUpdate = !logCall || (logCall && callResult === 'Connected');
@@ -77,7 +91,7 @@ export default function CandidateProfile() {
 
   const fetchStatuses = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/candidates/meta/statuses', { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/api/candidates/meta/statuses`, { credentials: 'include' });
       const data = await res.json();
       if (res.ok) setStatuses(data.statuses);
     } catch (err) { console.error(err); }
@@ -85,20 +99,20 @@ export default function CandidateProfile() {
 
   const fetchProfileData = async () => {
     try {
-      const res = await fetch(`http://localhost:8080/api/candidates/${id}`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/api/candidates/${id}`, { credentials: 'include' });
       const data = await res.json();
       if (res.ok) {
         setCandidate(data.candidate);
         setTimeline(data.timeline);
       } else {
-        navigate('/hr/dashboard'); 
+        navigate('/hr/candidates'); 
       }
     } catch (err) { console.error(err); }
   };
 
   const fetchCallLogs = async () => {
     try {
-      const res = await fetch(`http://localhost:8080/api/candidates/${id}/calls`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/api/candidates/${id}/calls`, { credentials: 'include' });
       const data = await res.json();
       if (res.ok) setCallLogs(data.callLogs);
     } catch (err) { console.error(err); }
@@ -107,6 +121,7 @@ export default function CandidateProfile() {
   const handleLogInteraction = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError('');
     
     try {
       const payload = {
@@ -117,7 +132,7 @@ export default function CandidateProfile() {
         remarks: remarks,
       };
 
-      const res = await fetch(`http://localhost:8080/api/candidates/${id}/interaction`, {
+      const res = await fetch(`${API_BASE}/api/candidates/${id}/interaction`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -125,85 +140,111 @@ export default function CandidateProfile() {
       });
 
       if (res.ok) {
-        // Redirect to main queue upon successful save
-        navigate('/hr/dashboard');
+        // High-speed workflow: Return to pipeline queue instantly
+        navigate('/hr/candidates');
+      } else {
+        const errorData = await res.json();
+        setError(errorData.error || 'Failed to save interaction');
       }
     } catch (err) {
       console.error(err);
+      setError('Network error occurred.');
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   const getStatusIcon = (statusName: string) => {
     if (statusName.includes('Selected') || statusName === 'Joined') return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-    if (statusName.includes('Reject') || statusName.includes('Not Interested')) return <XCircle className="w-5 h-5 text-red-500" />;
-    return <Clock className="w-5 h-5 text-blue-500" />;
+    if (statusName.includes('Reject') || statusName.includes('Not Interested')) return <XCircle className="w-5 h-5 text-destructive" />;
+    return <Clock className="w-5 h-5 text-primary" />;
   };
 
   const getCallIcon = (result: string) => {
     switch(result) {
-      case 'Connected': return <PhoneCall className="w-4 h-4 text-emerald-600" />;
-      case 'Switched Off': return <PhoneOff className="w-4 h-4 text-red-500" />;
+      case 'Connected': return <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />;
+      case 'Switched Off': return <PhoneOff className="w-4 h-4 text-destructive" />;
       default: return <PhoneMissed className="w-4 h-4 text-amber-500" />;
     }
   };
 
-  if (!candidate) return <div className="p-8 text-center text-slate-500 font-medium animate-pulse">Loading Candidate Workspace...</div>;
+  if (!candidate) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+      <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <span className="text-sm font-bold text-muted-foreground animate-pulse tracking-widest uppercase">Loading Workspace...</span>
+    </div>
+  );
 
   const DetailRow = ({ label, value }: { label: string, value: string | number | null | undefined }) => {
     if (!value) return null;
     return (
-      <div className="flex justify-between items-start py-1.5 border-b border-slate-50 last:border-0">
-        <span className="font-semibold text-slate-400 text-xs mt-0.5">{label}</span>
-        <span className="text-right text-sm text-slate-700 font-medium max-w-[60%] break-words">{value}</span>
+      <div className="flex justify-between items-start py-2 border-b border-border/50 last:border-0">
+        <span className="font-bold text-muted-foreground text-[11px] uppercase tracking-wider mt-0.5">{label}</span>
+        <span className="text-right text-sm text-foreground font-semibold max-w-[60%] break-words">{value}</span>
       </div>
     );
   };
 
+  const inputClasses = "h-11 bg-muted/60 dark:bg-muted/40 border border-border focus:bg-background focus-visible:ring-2 focus-visible:ring-primary/20 transition-all rounded-xl font-medium w-full text-sm px-3 py-2 outline-none text-foreground";
+  const optionClass = "bg-white text-black dark:bg-card dark:text-foreground";
+
   return (
-    <div className="max-w-7xl mx-auto p-6 mt-6 space-y-6">
+    <motion.div 
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="max-w-7xl mx-auto p-4 sm:p-6 mt-4 space-y-6 pb-12"
+    >
       
       {/* Top Header & Navigation Bar */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-800 hover:bg-slate-100 hidden sm:flex">
-            <ArrowLeft className="w-5 h-5" />
+      <motion.div variants={itemVariants} className="flex items-center justify-between bg-card p-4 rounded-2xl shadow-sm border border-border">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 hidden sm:flex">
+            <ArrowLeft className="w-5 h-5 text-foreground" />
           </Button>
-          <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Candidate Workspace</h1>
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-foreground tracking-tight leading-none">Candidate Workspace</h1>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">ID: {candidate.id} • Pipeline Execution</p>
+          </div>
         </div>
-        <Button variant="outline" onClick={() => navigate(-1)} className="font-semibold text-slate-600">
-          Back to Queue
+        <Button variant="outline" onClick={() => navigate('/hr/candidates')} className="font-bold rounded-xl border-border">
+          Back to Pipeline
         </Button>
-      </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        
         {/* LEFT COLUMN: Details & Unified Update Form */}
         <div className="lg:col-span-1 space-y-6">
           
           {/* Candidate Info Card */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="mb-4">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight">{candidate.first_name} {candidate.last_name}</h2>
-              <p className="text-sm font-bold text-blue-600 mt-1 uppercase tracking-wider">{candidate.current_designation || candidate.profile || 'General Profile'}</p>
+          <motion.div variants={itemVariants} className="bg-card p-6 rounded-3xl shadow-soft border border-border relative overflow-hidden">
+            {/* Soft decorative background */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+
+            <div className="mb-6 relative z-10">
+              <h2 className="text-2xl font-black text-foreground tracking-tight leading-tight">{candidate.first_name} {candidate.last_name}</h2>
+              <p className="text-xs font-bold text-primary mt-1 uppercase tracking-wider">{candidate.current_designation || candidate.profile || 'General Profile'}</p>
             </div>
 
-            <div className="space-y-5">
-              <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <div className="flex items-center gap-3 text-sm text-slate-700">
-                  <Phone className="w-4 h-4 text-slate-400 shrink-0"/> 
-                  <span className="font-mono font-bold">{candidate.phone}</span>
+            <div className="space-y-6 relative z-10">
+              {/* Quick Contact Block */}
+              <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-border">
+                <div className="flex items-center gap-3 text-sm text-foreground">
+                  <div className="bg-white dark:bg-slate-700 p-1.5 rounded-lg shadow-sm border border-border"><Phone className="w-4 h-4 text-primary shrink-0"/></div>
+                  <span className="font-mono font-bold tracking-wide">{candidate.phone}</span>
                 </div>
                 {candidate.email && (
-                  <div className="flex items-center gap-3 text-sm text-slate-700">
-                    <Mail className="w-4 h-4 text-slate-400 shrink-0"/> 
+                  <div className="flex items-center gap-3 text-sm text-foreground">
+                    <div className="bg-white dark:bg-slate-700 p-1.5 rounded-lg shadow-sm border border-border"><Mail className="w-4 h-4 text-primary shrink-0"/></div>
                     <span className="font-medium break-all">{candidate.email}</span>
                   </div>
                 )}
               </div>
 
               <div className="space-y-1">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-3 mt-4">
-                  <Briefcase className="w-3.5 h-3.5" /> Professional
+                <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-3">
+                  <Briefcase className="w-3.5 h-3.5 text-primary" /> Professional
                 </h4>
                 <DetailRow label="Experience" value={candidate.experience_level} />
                 <DetailRow label="Company" value={candidate.current_company} />
@@ -211,238 +252,288 @@ export default function CandidateProfile() {
               </div>
 
               <div className="space-y-1">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-3 mt-4">
-                  <DollarSign className="w-3.5 h-3.5" /> Comp & Avail
+                <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-3 mt-5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Comp & Avail
                 </h4>
                 <DetailRow label="CTC (Cur/Exp)" value={candidate.current_ctc && candidate.expected_ctc ? `${candidate.current_ctc}L / ${candidate.expected_ctc}L` : null} />
                 <DetailRow label="Notice Period" value={candidate.notice_period} />
               </div>
 
               <div className="space-y-1">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-3 mt-4">
-                  <MapPin className="w-3.5 h-3.5" /> Source
+                <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-3 mt-5">
+                  <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Source
                 </h4>
                 <DetailRow label="Location" value={candidate.current_location} />
-                <div className="flex justify-between items-center py-2 border-t border-slate-100 mt-2">
-                  <span className="font-semibold text-slate-400 text-xs">Origin</span>
-                  <span className="bg-slate-100 text-slate-700 font-bold px-2 py-1 rounded text-xs">{candidate.source}</span>
+                <div className="flex justify-between items-center py-2 border-t border-border mt-2">
+                  <span className="font-bold text-muted-foreground text-[11px] uppercase tracking-wider">Origin</span>
+                  <span className="bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wider">{candidate.source}</span>
                 </div>
               </div>
 
               {candidate.resume_url && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <a href={candidate.resume_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white transition-all py-2.5 rounded-lg text-sm font-bold shadow-sm">
-                    <ExternalLink className="w-4 h-4" /> View Resume
+                <div className="pt-2">
+                  <a href={candidate.resume_url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition-all py-3 rounded-xl text-sm font-bold shadow-sm">
+                    <ExternalLink className="w-4 h-4" /> View Resume Details
                   </a>
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
           {/* Dynamic Action Area */}
-          {isProfileLocked ? (
-            <div className="bg-slate-50 p-6 rounded-xl shadow-inner border border-slate-200 text-center space-y-3">
-              <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Lock className="w-6 h-6 text-slate-500" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-700">Profile Locked</h3>
-              <p className="text-sm text-slate-500 font-medium">This candidate has reached a final stage (<span className="font-bold">{currentLeadStatus?.status_name}</span>). Further interactions and follow-ups are disabled.</p>
-            </div>
-          ) : (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-lg font-black text-slate-800 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-blue-600" /> Log Interaction
-              </h3>
-              
-              <form onSubmit={handleLogInteraction} className="space-y-5">
-                
-                {/* Call Logging Section */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={logCall} 
-                        onChange={(e) => {
-                          setLogCall(e.target.checked);
-                          if (!e.target.checked) setCallResult('');
-                        }}
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                      />
-                      I made a phone call
-                    </label>
-                    {logCall && <PhoneCall className="w-4 h-4 text-slate-400" />}
-                  </div>
-
-                  {logCall && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4 pt-2 border-t border-slate-200">
-                      <div>
-                        <select required={logCall} value={callResult} onChange={(e) => setCallResult(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-medium bg-white transition-all">
-                          <option value="" disabled>Select call result...</option>
-                          <option value="Connected">Connected</option>
-                          <option value="Not Connected">Not Connected</option>
-                          <option value="Switched Off">Switched Off</option>
-                          <option value="Ringing">Ringing</option>
-                          <option value="Busy">Busy</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
+          <motion.div variants={itemVariants}>
+            {isProfileLocked ? (
+              <div className="bg-destructive/5 p-6 rounded-3xl border border-destructive/20 text-center space-y-3">
+                <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Lock className="w-6 h-6 text-destructive" />
                 </div>
-
-                {/* Pipeline Section (Only visible if connected or no call made) */}
-                {isPipelineUpdate && (
-                  <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Pipeline Stage *</label>
-                      <select required value={statusId} onChange={(e) => {
-                          setStatusId(e.target.value);
-                          const newStatus = statuses.find(s => s.id.toString() === e.target.value);
-                          if (newStatus && newStatus.is_final_stage === 1) setFollowUpDate('');
-                        }} 
-                        className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-medium bg-white transition-all"
-                      >
-                        <option value="" disabled>Select stage...</option>
-                        {statuses.map(s => (
-                          <option key={s.id} value={s.id}>{s.status_name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    {!isSelectedTerminal && (
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Next Follow-up Date *</label>
-                        <input 
-                          type="date" 
-                          required 
-                          value={followUpDate} 
-                          min={new Date().toISOString().split('T')[0]} 
-                          onChange={(e) => setFollowUpDate(e.target.value)} 
-                          className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-medium transition-all" 
-                        />
-                      </div>
-                    )}
-
-                    {isSelectedTerminal && (
-                      <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg text-xs font-semibold flex items-start gap-2">
-                        <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                        Selecting this will lock the candidate profile. No future follow-ups can be scheduled.
-                      </div>
-                    )}
-
-                    {/* Remarks are ALWAYS required, either as call notes or pipeline remarks */}
-                    <div className="pt-2">
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Remarks / Notes *</label>
-                      <textarea required rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={isPipelineUpdate ? "Summarize the interaction..." : "Why didn't the call connect? (e.g., 'Ringing no answer')"} className="w-full border border-slate-300 rounded-lg p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm font-medium resize-none transition-all"></textarea>
-                    </div>
+                <h3 className="text-lg font-black text-destructive">Profile Locked</h3>
+                <p className="text-xs text-destructive/80 font-bold leading-relaxed">This candidate reached a final stage (<span className="uppercase text-destructive">{currentLeadStatus?.status_name}</span>). Further interactions are disabled.</p>
+              </div>
+            ) : (
+              <div className="bg-card p-6 rounded-3xl shadow-soft border border-border">
+                <h3 className="text-base font-black text-foreground mb-5 pb-4 border-b border-border flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-primary" /> Execute Interaction
+                </h3>
+                
+                {error && (
+                  <div className="mb-5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" /> {error}
                   </div>
                 )}
 
-                <Button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-6 shadow-md transition-all">
-                  {isSubmitting ? 'Saving...' : (isPipelineUpdate ? 'Save & Update Pipeline' : 'Save Call Log')}
-                </Button>
-              </form>
-            </div>
-          )}
+                <form onSubmit={handleLogInteraction} className="space-y-5">
+                  
+                  {/* Call Logging Section */}
+                  <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-2xl border border-border space-y-4">
+                    <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-xl border border-border shadow-sm">
+                      <label className="text-sm font-bold text-foreground flex items-center gap-3 cursor-pointer w-full">
+                        <input 
+                          type="checkbox" 
+                          checked={logCall} 
+                          onChange={(e) => {
+                            setLogCall(e.target.checked);
+                            if (!e.target.checked) setCallResult('');
+                          }}
+                          className="w-4 h-4 text-primary rounded border-border focus:ring-primary"
+                        />
+                        Dialer Executed
+                      </label>
+                      {logCall && <PhoneCall className="w-4 h-4 text-primary animate-pulse" />}
+                    </div>
+
+                    <AnimatePresence>
+                      {logCall && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-2">
+                            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 ml-1">Call Result *</label>
+                            <select required={logCall} value={callResult} onChange={(e) => setCallResult(e.target.value)} className={inputClasses}>
+                              <option className={optionClass} value="" disabled>Select outcome...</option>
+                              <option className={optionClass} value="Connected">Connected</option>
+                              <option className={optionClass} value="Not Connected">Not Connected</option>
+                              <option className={optionClass} value="Switched Off">Switched Off</option>
+                              <option className={optionClass} value="Ringing">Ringing</option>
+                              <option className={optionClass} value="Busy">Busy</option>
+                            </select>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Pipeline Section */}
+                  <AnimatePresence>
+                    {isPipelineUpdate && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="space-y-4 pt-2 overflow-hidden"
+                      >
+                        <div>
+                          <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 ml-1">Update Pipeline Stage *</label>
+                          <select required value={statusId} onChange={(e) => {
+                              setStatusId(e.target.value);
+                              const newStatus = statuses.find(s => s.id.toString() === e.target.value);
+                              if (newStatus && newStatus.is_final_stage === 1) setFollowUpDate('');
+                            }} 
+                            className={inputClasses}
+                          >
+                            <option className={optionClass} value="" disabled>Select pipeline stage...</option>
+                            {statuses.map(s => (
+                              <option className={optionClass} key={s.id} value={s.id}>{s.status_name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        {!isSelectedTerminal && (
+                          <div>
+                            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 ml-1">Next Follow-up Date *</label>
+                            <input 
+                              type="date" 
+                              required 
+                              value={followUpDate} 
+                              min={new Date().toISOString().split('T')[0]} 
+                              onChange={(e) => setFollowUpDate(e.target.value)} 
+                              className={inputClasses}
+                            />
+                          </div>
+                        )}
+
+                        {isSelectedTerminal && (
+                          <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-800 dark:text-red-400 p-3 rounded-xl text-xs font-bold flex items-start gap-2">
+                            <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                            Warning: Selecting this locks the profile permanently.
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Remarks */}
+                  <div className="pt-2">
+                    <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 ml-1">Interaction Notes *</label>
+                    <textarea required rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={isPipelineUpdate ? "Summarize the interaction..." : "Why didn't the call connect?"} className={`${inputClasses} resize-none`}></textarea>
+                  </div>
+
+                  <Button type="submit" disabled={isSubmitting} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-black py-6 rounded-xl shadow-soft transition-all text-sm uppercase tracking-wider">
+                    {isSubmitting ? (
+                      <span className="flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin" /> Syncing...</span>
+                    ) : (
+                      isPipelineUpdate ? 'Save & Progress Pipeline' : 'Log Call Attempt'
+                    )}
+                  </Button>
+                </form>
+              </div>
+            )}
+          </motion.div>
         </div>
 
         {/* RIGHT COLUMN: The Read-Only Dynamic Workspace (Tabs) */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 h-fit overflow-hidden">
+        <motion.div variants={itemVariants} className="lg:col-span-2 bg-card rounded-3xl shadow-soft border border-border h-fit overflow-hidden flex flex-col">
           
-          {/* Tab Header */}
-          <div className="flex border-b border-slate-200 bg-slate-50/50">
-            <button 
-              onClick={() => setActiveTab('journey')} 
-              className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'journey' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <List className="w-4 h-4" /> Candidate Journey
-            </button>
-            <button 
-              onClick={() => setActiveTab('calls')} 
-              className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'calls' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <PhoneCall className="w-4 h-4" /> Call Logs
-              {callLogs.length > 0 && <span className="bg-slate-200 text-slate-600 py-0.5 px-2 rounded-full text-[10px] ml-1">{callLogs.length}</span>}
-            </button>
+          {/* Animated Tab Header */}
+          <div className="flex p-2 gap-2 border-b border-border bg-slate-50/50 dark:bg-slate-900/20">
+            {['journey', 'calls'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as 'journey' | 'calls')}
+                className={`relative flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 transition-all rounded-xl z-10 ${
+                  activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                {activeTab === tab && (
+                  <motion.div
+                    layoutId="active-tab-indicator"
+                    className="absolute inset-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-border -z-10"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+                {tab === 'journey' ? <List className="w-4 h-4" /> : <PhoneCall className="w-4 h-4" />}
+                {tab === 'journey' ? 'Pipeline History' : 'Dialer Audit'}
+                {tab === 'calls' && callLogs.length > 0 && (
+                  <span className={`py-0.5 px-2 rounded-full text-[10px] ml-1 transition-colors ${activeTab === 'calls' ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                    {callLogs.length}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
 
-          <div className="p-8">
-            {/* TAB CONTENT: Candidate Journey */}
-            {activeTab === 'journey' && (
-              <div className="relative border-l-[3px] border-slate-100 ml-4 space-y-10">
-                {timeline.map((event, index) => (
-                  <div key={event.id} className="relative pl-10">
-                    <div className="absolute -left-[14px] top-0 bg-white p-1">
-                      {getStatusIcon(event.status_name)}
-                    </div>
-                    
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-2">
-                      <h4 className={`text-base font-black ${index === 0 ? 'text-slate-900' : 'text-slate-500'}`}>
-                        {event.status_name}
-                        {index === 0 && <span className="ml-3 text-[10px] bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full uppercase tracking-widest font-bold">Current Stage</span>}
-                      </h4>
-                      <span className="text-xs font-bold text-slate-400 mt-1 md:mt-0 bg-slate-50 px-3 py-1 rounded-md">
-                        {new Date(event.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
-                      </span>
-                    </div>
-                    
-                    <p className={`text-sm p-4 rounded-xl font-medium shadow-sm border ${index === 0 ? 'bg-blue-50 border-blue-100 text-blue-900' : 'bg-white border-slate-200 text-slate-600'}`}>
-                      "{event.remarks}"
-                    </p>
-
-                    {event.follow_up_date && (
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-3 py-1.5 rounded-md uppercase tracking-wide flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          Follow-up: {new Date(event.follow_up_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+          <div className="p-6 sm:p-8 bg-card flex-1">
+            <AnimatePresence mode="wait">
+              {/* TAB CONTENT: Candidate Journey */}
+              {activeTab === 'journey' && (
+                <motion.div 
+                  key="journey"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative border-l-[3px] border-slate-100 dark:border-slate-800 ml-4 space-y-8"
+                >
+                  {timeline.map((event, index) => (
+                    <div key={event.id} className="relative pl-8 sm:pl-10">
+                      <div className="absolute -left-[17px] top-0 bg-card p-1.5 rounded-full border-[3px] border-slate-100 dark:border-slate-800">
+                        {getStatusIcon(event.status_name)}
+                      </div>
+                      
+                      <div className="flex flex-col md:flex-row md:items-center justify-between mb-3">
+                        <h4 className={`text-base font-black tracking-tight flex items-center gap-3 ${index === 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {event.status_name}
+                          {index === 0 && <span className="text-[9px] bg-primary/10 text-primary px-2.5 py-1 rounded-md uppercase tracking-widest font-black border border-primary/20">Current Stage</span>}
+                        </h4>
+                        <span className="text-[11px] font-bold text-muted-foreground mt-1 md:mt-0 uppercase tracking-wider bg-slate-50 dark:bg-slate-800/50 px-3 py-1 rounded-lg border border-border">
+                          {new Date(event.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
                         </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                      
+                      <div className={`text-sm p-5 rounded-2xl font-medium shadow-sm border ${index === 0 ? 'bg-primary/5 border-primary/20 text-foreground' : 'bg-white dark:bg-slate-900 border-border text-muted-foreground'}`}>
+                        <p className="italic">"{event.remarks}"</p>
+                      </div>
 
-            {/* TAB CONTENT: Call Logs (View Only) */}
-            {activeTab === 'calls' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <h4 className="text-sm font-black text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-                  <PhoneCall className="w-4 h-4 text-slate-400" /> Dialer Audit History
-                </h4>
-                
-                <div className="space-y-3">
+                      {event.follow_up_date && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Scheduled: {new Date(event.follow_up_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+
+              {/* TAB CONTENT: Call Logs */}
+              {activeTab === 'calls' && (
+                <motion.div 
+                  key="calls"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4"
+                >
                   {callLogs.length === 0 ? (
-                    <div className="text-center py-12 text-sm text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
-                      <PhoneOff className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                      No calls logged for this candidate yet.
+                    <div className="text-center py-16 text-sm text-muted-foreground bg-slate-50 dark:bg-slate-900/50 border-2 border-dashed border-border rounded-3xl flex flex-col items-center">
+                      <PhoneOff className="w-10 h-10 text-slate-300 dark:text-slate-700 mb-4" />
+                      <p className="font-bold">No dialer execution records found.</p>
                     </div>
                   ) : (
                     callLogs.map((log) => (
-                      <div key={log.id} className="flex items-start gap-4 p-4 rounded-xl border border-slate-100 bg-white hover:border-slate-200 transition-colors shadow-sm">
-                        <div className="mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <div key={log.id} className="flex items-start gap-4 p-5 rounded-2xl border border-border bg-slate-50/50 dark:bg-slate-900/20 hover:bg-white dark:hover:bg-slate-800 transition-colors shadow-sm group">
+                        <div className="mt-1 bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-border shadow-sm group-hover:scale-110 transition-transform">
                           {getCallIcon(log.call_result)}
                         </div>
                         <div className="flex-1">
-                          <div className="flex justify-between items-start">
+                          <div className="flex justify-between items-start mb-2">
                             <div>
-                              <span className="font-bold text-slate-800 text-sm">{log.call_result}</span>
+                              <span className="font-black text-foreground tracking-tight">{log.call_result}</span>
                             </div>
-                            <span className="text-[11px] font-bold text-slate-400">{new Date(log.call_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })}</span>
+                            <span className="text-[10px] font-bold text-muted-foreground bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md uppercase tracking-wider border border-border">
+                              {new Date(log.call_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })}
+                            </span>
                           </div>
-                          {log.notes && <p className="text-sm text-slate-600 mt-1">"{log.notes}"</p>}
-                          <p className="text-[10px] font-semibold text-slate-400 mt-2 uppercase tracking-wide">
-                            Logged by: {log.first_name} {log.last_name}
+                          {log.notes && <p className="text-sm text-muted-foreground font-medium leading-relaxed bg-white dark:bg-slate-900 p-3 rounded-xl border border-border">"{log.notes}"</p>}
+                          <p className="text-[9px] font-black text-muted-foreground mt-3 uppercase tracking-widest flex items-center gap-1.5">
+                            <ChevronRight className="w-3 h-3 text-primary" /> Executed by Agent: {log.first_name} {log.last_name}
                           </p>
                         </div>
                       </div>
                     ))
                   )}
-                </div>
-              </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
