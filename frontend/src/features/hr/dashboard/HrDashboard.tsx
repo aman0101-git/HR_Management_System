@@ -1,11 +1,10 @@
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { motion, type Variants } from "framer-motion";
-import { 
-  UserPlus, 
-  Sparkles, 
-  BarChart3, 
-  PhoneCall, 
+import {
+  UserPlus,
+  BarChart3,
+  PhoneCall,
   ArrowRight,
   Clock,
   Briefcase,

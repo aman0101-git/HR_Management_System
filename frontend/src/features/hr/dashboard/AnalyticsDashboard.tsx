@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend 
@@ -227,7 +227,7 @@ export default function AnalyticsDashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={data.charts.callOutcomes} cx="50%" cy="50%" innerRadius={75} outerRadius={105} paddingAngle={3} dataKey="count" nameKey="call_result">
-                        {data.charts.callOutcomes.map((entry, index) => (
+                        {data.charts.callOutcomes.map((_, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} className="stroke-background" strokeWidth={2} />
                         ))}
                       </Pie>
