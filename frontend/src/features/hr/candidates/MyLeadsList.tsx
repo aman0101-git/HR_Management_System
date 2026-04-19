@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Clock, AlertCircle, CheckCircle2, Calendar, Lock, Search, 
-  ChevronLeft, ChevronRight, Filter, PhoneCall, Activity, ExternalLink 
+import {
+  Clock, AlertCircle, CheckCircle2, Calendar, Lock, Search,
+  ChevronLeft, ChevronRight, Filter, PhoneCall, ExternalLink
 } from "lucide-react";
-import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 
 // Import your centralized API Base and UI Components
 import { API_BASE } from '../../../apiBase';
